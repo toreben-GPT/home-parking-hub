@@ -1,0 +1,3 @@
+# ローカル開発専用。実際の値は .dev.vars に保存し、Gitへ追加しないでください。
+ACCESS_CODE="replace-with-a-local-access-code"
+SESSION_SECRET="replace-with-a-long-random-secret"
