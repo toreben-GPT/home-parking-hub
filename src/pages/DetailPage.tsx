@@ -128,6 +128,7 @@ export function DetailPage() {
   const [photoKind, setPhotoKind] = useState<PhotoKind>("price_sign");
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoNote, setPhotoNote] = useState("");
+  const [photoError, setPhotoError] = useState("");
 
   const load = useCallback(async () => {
     if (!parkingId) {
@@ -235,25 +236,26 @@ export function DetailPage() {
   async function handlePhotoUpload(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!lot || !photoFile) {
-      setError("追加する写真を選んでください。");
+      setPhotoError("追加する写真を選んでください。");
       return;
     }
     if (photoFile.size > PHOTO_UPLOAD_LIMIT_BYTES) {
-      setError("写真は1枚10MBまでです。");
+      setPhotoError("写真は1枚10MBまでです。");
       return;
     }
     setBusy("photo");
+    setPhotoError("");
     setError("");
     setSuccess("");
     try {
       const photo = await api.uploadPhoto(lot.id, photoFile, photoKind, photoNote.trim());
-      setLot({ ...lot, photos: [photo, ...lot.photos] });
+      setLot((current) => current ? { ...current, photos: [photo, ...current.photos] } : current);
       setPhotoFile(null);
       setPhotoNote("");
       if (photoInputRef.current) photoInputRef.current.value = "";
       setSuccess("写真を追加しました。");
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "写真を保存できませんでした。");
+      setPhotoError(caught instanceof Error ? caught.message : "写真を保存できませんでした。");
     } finally {
       setBusy("");
     }
@@ -417,8 +419,12 @@ export function DetailPage() {
                 ref={photoInputRef}
                 type="file"
                 accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif"
+                aria-describedby={photoError ? "photo-upload-error" : undefined}
                 disabled={busy === "photo"}
-                onChange={(event) => setPhotoFile(event.target.files?.[0] ?? null)}
+                onChange={(event) => {
+                  setPhotoFile(event.target.files?.[0] ?? null);
+                  setPhotoError("");
+                }}
               />
             </label>
             <label>
@@ -431,6 +437,7 @@ export function DetailPage() {
                 onChange={(event) => setPhotoNote(event.target.value)}
               />
             </label>
+            {photoError ? <div id="photo-upload-error"><Feedback tone="error">{photoError}</Feedback></div> : null}
             <button className="button button--teal" type="submit" disabled={Boolean(busy)}>
               <Plus aria-hidden="true" />
               {busy === "photo" ? "保存中…" : "写真を追加"}
