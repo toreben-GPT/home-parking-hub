@@ -65,6 +65,12 @@ describe("request validation", () => {
     expect(validateParkingLotInput(input).name).toBe("テスト駐車場");
   });
 
+  it("accepts an explicitly unrated parking-ease state", () => {
+    const input = parkingInput();
+    input.parkingEase = "unrated";
+    expect(validateParkingLotInput(input).parkingEase).toBe("unrated");
+  });
+
   it("requires the last-seen update time when editing", () => {
     const update = {
       ...parkingInput(),
@@ -136,9 +142,17 @@ describe("request validation", () => {
     const backup = backupEnvelope();
     expect(validateBackupEnvelope(backup)).toEqual(backup);
 
+    const currentBackup = structuredClone(backup);
+    currentBackup.schemaVersion = 2;
+    currentBackup.parkingLots[0].parkingEase = "unrated";
+    expect(validateBackupEnvelope(currentBackup)).toEqual(currentBackup);
+
     const invalid = structuredClone(backup);
     invalid.parkingLots[0].pricingHistory[0].isCurrent = false;
     expect(() => validateBackupEnvelope(invalid)).toThrow(ValidationError);
+
+    const unsupported = { ...backup, schemaVersion: 3 };
+    expect(() => validateBackupEnvelope(unsupported)).toThrowError(/対応していません/u);
   });
 
   it("rejects an oversized backup before a destructive restore starts", () => {

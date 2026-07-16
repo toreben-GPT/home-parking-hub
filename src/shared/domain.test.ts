@@ -9,6 +9,7 @@ import {
   formatParkingStatus,
   formatPatternLabel,
   formatPaymentMethods,
+  formatPhotoNote,
   formatTimePeriod,
   formatWalkDistance,
   formatWalkMinutes,
@@ -191,19 +192,17 @@ describe("sortParkingLots", () => {
     ]);
   });
 
-  it("uses walking minutes, then distance, with missing proximity values last", () => {
+  it("uses walking minutes without letting distance add an undocumented tier", () => {
     const lots = [
-      makeLot("徒歩不明", { walkMinutes: null, walkDistanceMeters: 100 }),
-      makeLot("6分", { walkMinutes: 6, walkDistanceMeters: 200 }),
-      makeLot("5分400m", { walkMinutes: 5, walkDistanceMeters: 400 }),
-      makeLot("5分300m", { walkMinutes: 5, walkDistanceMeters: 300 }),
-      makeLot("5分距離不明", { walkMinutes: 5, walkDistanceMeters: null }),
+      makeLot("徒歩不明", { name: "あおい", walkMinutes: null, walkDistanceMeters: 10 }),
+      makeLot("6分", { name: "あおい", walkMinutes: 6, walkDistanceMeters: 10 }),
+      makeLot("5分近距離", { name: "かえで", walkMinutes: 5, walkDistanceMeters: 100 }),
+      makeLot("5分遠距離", { name: "あおい", walkMinutes: 5, walkDistanceMeters: 900 }),
     ];
 
     expect(sortParkingLots(lots, "WN-19").map((lot) => lot.id)).toEqual([
-      "5分300m",
-      "5分400m",
-      "5分距離不明",
+      "5分遠距離",
+      "5分近距離",
       "6分",
       "徒歩不明",
     ]);
@@ -214,9 +213,10 @@ describe("sortParkingLots", () => {
       makeLot("難", { parkingEase: "difficult" }),
       makeLot("普通", { parkingEase: "normal" }),
       makeLot("簡単", { parkingEase: "easy" }),
+      makeLot("未評価", { parkingEase: "unrated" }),
     ];
 
-    expect(sortParkingLots(lots, "WN-19").map((lot) => lot.id)).toEqual(["簡単", "普通", "難"]);
+    expect(sortParkingLots(lots, "WN-19").map((lot) => lot.id)).toEqual(["簡単", "普通", "難", "未評価"]);
   });
 
   it("uses selected-segment parkable rate, then larger sample count", () => {
@@ -273,6 +273,115 @@ describe("sortParkingLots", () => {
       "cheap",
       "expensive",
     ]);
+  });
+
+  it("keeps the supplied six parking lots stable for every usage pattern when optional rankings are unregistered", () => {
+    const confirmedPrice = (amountYen: number) => ({ amountYen, needsConfirmation: false });
+    const lots = [
+      makeLot("lucky", {
+        name: "ラッキーパーキング東F",
+        walkMinutes: null,
+        walkDistanceMeters: null,
+        parkingEase: "unrated",
+        availabilityLogs: [],
+        prices: {
+          "WN-19": confirmedPrice(400),
+          "WN-20": confirmedPrice(800),
+          "HN-19": confirmedPrice(400),
+          "HN-20": confirmedPrice(800),
+          "W-24": confirmedPrice(2_100),
+          "H-24": confirmedPrice(1_300),
+        },
+      }),
+      makeLot("seiwa-2", {
+        name: "セイワパーク博多駅東2丁目2",
+        walkMinutes: null,
+        walkDistanceMeters: null,
+        parkingEase: "unrated",
+        availabilityLogs: [],
+        prices: {
+          "WN-19": confirmedPrice(500),
+          "WN-20": confirmedPrice(500),
+          "HN-19": confirmedPrice(500),
+          "HN-20": confirmedPrice(500),
+          "W-24": confirmedPrice(1_500),
+          "H-24": confirmedPrice(800),
+        },
+      }),
+      makeLot("seiwa", {
+        name: "セイワパーク博多駅東",
+        walkMinutes: null,
+        walkDistanceMeters: null,
+        parkingEase: "unrated",
+        availabilityLogs: [],
+        prices: {
+          "WN-19": confirmedPrice(700),
+          "WN-20": confirmedPrice(500),
+          "HN-19": confirmedPrice(600),
+          "HN-20": confirmedPrice(500),
+          "W-24": confirmedPrice(1_800),
+          "H-24": confirmedPrice(1_300),
+        },
+      }),
+      makeLot("aruaru", {
+        name: "あるあるパーキング博多駅東2丁目",
+        walkMinutes: null,
+        walkDistanceMeters: null,
+        parkingEase: "unrated",
+        availabilityLogs: [],
+        prices: {
+          "WN-19": confirmedPrice(600),
+          "WN-20": confirmedPrice(400),
+          "HN-19": confirmedPrice(600),
+          "HN-20": confirmedPrice(400),
+          "W-24": confirmedPrice(2_800),
+          "H-24": confirmedPrice(2_200),
+        },
+      }),
+      makeLot("parks", {
+        name: "PARKS PARK 福岡博多駅東3丁目",
+        walkMinutes: null,
+        walkDistanceMeters: null,
+        parkingEase: "unrated",
+        availabilityLogs: [],
+        prices: {
+          "WN-19": confirmedPrice(900),
+          "WN-20": confirmedPrice(500),
+          "HN-19": confirmedPrice(900),
+          "HN-20": confirmedPrice(500),
+          "W-24": confirmedPrice(2_000),
+          "H-24": confirmedPrice(1_400),
+        },
+      }),
+      makeLot("ib", {
+        name: "IBパーク 駅東",
+        walkMinutes: null,
+        walkDistanceMeters: null,
+        parkingEase: "unrated",
+        availabilityLogs: [],
+        prices: {
+          "WN-19": confirmedPrice(700),
+          "WN-20": confirmedPrice(500),
+          "HN-19": confirmedPrice(500),
+          "HN-20": confirmedPrice(400),
+          "W-24": confirmedPrice(2_900),
+          "H-24": confirmedPrice(1_600),
+        },
+      }),
+    ];
+
+    const expectedByPattern: Record<PatternId, string[]> = {
+      "WN-19": ["lucky", "seiwa-2", "aruaru", "ib", "seiwa", "parks"],
+      "WN-20": ["aruaru", "ib", "parks", "seiwa", "seiwa-2", "lucky"],
+      "HN-19": ["lucky", "ib", "seiwa-2", "aruaru", "seiwa", "parks"],
+      "HN-20": ["ib", "aruaru", "parks", "seiwa", "seiwa-2", "lucky"],
+      "W-24": ["seiwa-2", "seiwa", "parks", "lucky", "aruaru", "ib"],
+      "H-24": ["seiwa-2", "seiwa", "lucky", "parks", "ib", "aruaru"],
+    };
+
+    for (const [patternId, expectedIds] of Object.entries(expectedByPattern)) {
+      expect(sortParkingLots(lots, patternId as PatternId).map((lot) => lot.id)).toEqual(expectedIds);
+    }
   });
 });
 
@@ -367,7 +476,7 @@ describe("Japanese display formatters", () => {
       "空き実績：8/10回（残りわずか3回）",
     );
     expect(formatAvailabilitySummary({ total: 0, parkable: 0, limited: 0, full: 0, rate: null })).toBe(
-      "空き実績：記録なし",
+      "空き実績：0/0回（残りわずか0回）",
     );
   });
 
@@ -377,6 +486,7 @@ describe("Japanese display formatters", () => {
     expect(formatWalkDistance(1_200)).toBe("1,200m");
     expect(formatWalkDistance(null)).toBe("未登録");
     expect(formatParkingEase("easy")).toBe("停めやすい");
+    expect(formatParkingEase("unrated")).toBe("未評価");
     expect(formatPaymentMethods(["cashless", "cash", "cash"])).toBe("現金、キャッシュレス");
     expect(formatPaymentMethods([])).toBe("未登録");
     expect(formatAvailabilityStatus("limited")).toBe("残りわずか");
@@ -389,6 +499,12 @@ describe("Japanese display formatters", () => {
   it("formats timestamps in Japan time and handles invalid input", () => {
     expect(formatJapaneseDateTime("2026-07-15T10:05:00.000Z")).toBe("2026/07/15 19:05");
     expect(formatJapaneseDateTime("invalid")).toBe("日時不明");
+  });
+
+  it("hides importer photo hashes while preserving normal notes", () => {
+    const hash = "a".repeat(64);
+    expect(formatPhotoNote(`料金看板写真 | sha256=${hash}`)).toBe("料金看板写真");
+    expect(formatPhotoNote("入口が狭いので注意")).toBe("入口が狭いので注意");
   });
 });
 
@@ -463,7 +579,7 @@ describe("formatAiAnalysisText", () => {
     expect(text).toContain("住所：未登録");
     expect(text).toContain("徒歩時間：未登録");
     expect(text).toContain("決済方法：未登録");
-    expect(text).toContain("全体：記録なし");
+    expect(text).toContain("全体：0/0回（残りわずか0回）");
     expect(text.match(/【空き状況ログ】\n記録なし/)).not.toBeNull();
     expect(text.match(/【メモ履歴】\n記録なし/)).not.toBeNull();
     expect(text).toContain("おすすめコメント：未登録");

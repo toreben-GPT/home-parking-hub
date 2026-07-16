@@ -51,6 +51,7 @@ const EASE_OPTIONS: ReadonlyArray<{
   value: ParkingEase;
   label: string;
 }> = [
+  { value: "unrated", label: "未評価" },
   { value: "easy", label: "停めやすい" },
   { value: "normal", label: "普通" },
   { value: "difficult", label: "停めにくい" },

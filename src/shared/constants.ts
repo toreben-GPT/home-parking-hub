@@ -38,4 +38,5 @@ export const EMPTY_PRICING_INPUT: PricingInput = {
 
 export const PHOTO_UPLOAD_LIMIT_BYTES = 10 * 1024 * 1024;
 export const SESSION_MAX_AGE_DAYS = 90;
-export const BACKUP_SCHEMA_VERSION = 1;
+export const BACKUP_SCHEMA_VERSION = 2;
+export const SUPPORTED_BACKUP_SCHEMA_VERSIONS = [1, BACKUP_SCHEMA_VERSION] as const;

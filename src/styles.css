@@ -493,6 +493,34 @@ textarea:focus-visible {
   line-height: 1.6;
 }
 
+.app-info-list {
+  display: grid;
+  gap: 0;
+  margin: 0;
+}
+
+.app-info-list > div {
+  display: grid;
+  grid-template-columns: minmax(92px, 0.35fr) minmax(0, 1fr);
+  gap: 12px;
+  padding: 11px 0;
+  border-top: 1px solid var(--color-gray-200);
+}
+
+.app-info-list dt {
+  color: var(--color-gray-500);
+  font-size: 13px;
+}
+
+.app-info-list dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--color-navy);
+  font-size: 14px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
 .empty-inline {
   margin-bottom: 0;
   padding: 20px 0;
@@ -905,6 +933,30 @@ textarea:focus-visible {
 
 .editor-screen {
   background: var(--color-white);
+}
+
+.edit-memo-form {
+  width: min(100%, var(--narrow-width));
+  margin-inline: auto;
+  padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+}
+
+.edit-memo-form__actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 18px;
+}
+
+.edit-memo-form__actions .parking-editor__button {
+  width: min(100%, 280px);
+}
+
+.edit-memo-form__success {
+  margin: 0;
+  color: #27663f;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.5;
 }
 
 .parking-editor {
@@ -1659,6 +1711,22 @@ textarea:focus-visible {
 .memo-edit textarea {
   min-height: 84px;
   resize: vertical;
+}
+
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"] {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+@supports (width: -webkit-fill-available) {
+  input[type="date"],
+  input[type="time"],
+  input[type="datetime-local"] {
+    width: -webkit-fill-available;
+  }
 }
 
 .availability-main {

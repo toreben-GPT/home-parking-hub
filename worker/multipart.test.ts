@@ -19,9 +19,15 @@ function requestBody(bytes: Uint8Array): ArrayBuffer {
   return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
 }
 
-function safariMultipartBody(boundary: string, fileBytes: Uint8Array): Uint8Array {
+function safariMultipartBody(
+  boundary: string,
+  fileBytes: Uint8Array,
+  options: { preamble?: string; trailingCrlf?: boolean } = {},
+): Uint8Array {
+  const { preamble = "", trailingCrlf = true } = options;
   return joinBytes([
     encoder.encode(
+      preamble +
       `--${boundary}\r\n` +
       `Content-Disposition: form-data; name="file"; filename="料金看板.png"\r\n` +
       `Content-Type: image/png\r\n\r\n`,
@@ -34,7 +40,7 @@ function safariMultipartBody(boundary: string, fileBytes: Uint8Array): Uint8Arra
       `--${boundary}\r\n` +
       `Content-Disposition: form-data; name="note"\r\n\r\n` +
       `Safariから送信\r\n` +
-      `--${boundary}--\r\n`,
+      `--${boundary}--${trailingCrlf ? "\r\n" : ""}`,
     ),
   ]);
 }
@@ -77,9 +83,50 @@ describe("bounded multipart parser", () => {
     expect(result.formData.get("file")).toBeInstanceOf(File);
     expect(warn).toHaveBeenCalledWith(
       "Native multipart parser failed; bounded fallback succeeded",
-      expect.objectContaining({ bodyBytes: bytes.byteLength, boundaryLength: boundary.length }),
+      expect.objectContaining({
+        bodyBytes: bytes.byteLength,
+        boundaryLength: boundary.length,
+        openingBoundaryOffset: 0,
+      }),
     );
     warn.mockRestore();
+  });
+
+  it("accepts a leading CRLF and a bounded multipart preamble", async () => {
+    for (const preamble of ["\r\n", "Safari preamble\r\n"]) {
+      const formData = parseMultipartFormDataBytes(
+        safariMultipartBody(boundary, png, { preamble }),
+        `multipart/form-data; boundary=${boundary}`,
+      );
+      expect(formData.get("file")).toBeInstanceOf(File);
+      expect(formData.get("kind")).toBe("price_sign");
+    }
+  });
+
+  it("accepts the closing boundary with or without a trailing CRLF", () => {
+    for (const trailingCrlf of [true, false]) {
+      expect(() =>
+        parseMultipartFormDataBytes(
+          safariMultipartBody(boundary, png, { trailingCrlf }),
+          `multipart/form-data; boundary=${boundary}`,
+        ),
+      ).not.toThrow();
+    }
+  });
+
+  it("rejects a wrong boundary and a preamble larger than the safety limit", () => {
+    const bytes = safariMultipartBody(boundary, png);
+    expect(() =>
+      parseMultipartFormDataBytes(bytes, "multipart/form-data; boundary=wrong-boundary"),
+    ).toThrowError(/先頭が正しくありません/u);
+
+    const oversizedPreamble = `${"x".repeat(8 * 1024)}\r\n`;
+    expect(() =>
+      parseMultipartFormDataBytes(
+        safariMultipartBody(boundary, png, { preamble: oversizedPreamble }),
+        `multipart/form-data; boundary=${boundary}`,
+      ),
+    ).toThrowError(/先頭が正しくありません/u);
   });
 
   it("rejects a missing boundary, a truncated body, and an oversized body", async () => {

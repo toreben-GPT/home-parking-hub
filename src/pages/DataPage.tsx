@@ -1,10 +1,12 @@
 import { ChangeEvent, useEffect, useRef, useState } from "react";
-import { DatabaseBackup, Download, LogOut, Pencil, RefreshCw, Upload } from "lucide-react";
+import { DatabaseBackup, Download, Info, LogOut, Pencil, RefreshCw, Upload } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { AppHeader } from "../components/AppHeader";
 import { Feedback, LoadingView } from "../components/Feedback";
 import { useAuth } from "../contexts/auth-context";
 import { api } from "../services/api";
+import { APP_BUILD_TIME, APP_RELEASE_NOTE, APP_VERSION } from "../app-info";
+import { SUPPORTED_BACKUP_SCHEMA_VERSIONS } from "../shared/constants";
 import type { BackupEnvelope, ParkingLot, ParkingStatus } from "../shared/types";
 
 const STATUS_LABELS: Record<ParkingStatus, string> = {
@@ -12,6 +14,12 @@ const STATUS_LABELS: Record<ParkingStatus, string> = {
   excluded: "候補から除外",
   closed: "閉鎖",
 };
+
+const APP_BUILD_TIME_LABEL = new Intl.DateTimeFormat("ja-JP", {
+  dateStyle: "medium",
+  timeStyle: "short",
+  timeZone: "Asia/Tokyo",
+}).format(new Date(APP_BUILD_TIME));
 
 export function DataPage() {
   const navigate = useNavigate();
@@ -78,7 +86,10 @@ export function DataPage() {
     }
     try {
       const parsed = JSON.parse(await file.text()) as BackupEnvelope;
-      if (parsed.schemaVersion !== 1 || !Array.isArray(parsed.parkingLots)) {
+      if (
+        !SUPPORTED_BACKUP_SCHEMA_VERSIONS.includes(parsed.schemaVersion) ||
+        !Array.isArray(parsed.parkingLots)
+      ) {
         throw new Error("このアプリのバックアップ形式ではありません。");
       }
       setPendingBackup(parsed);
@@ -232,6 +243,30 @@ export function DataPage() {
             <LogOut aria-hidden="true" />
             {busy === "logout" ? "ログアウトしています…" : "この端末でログアウト"}
           </button>
+        </section>
+
+        <section className="data-section data-section--quiet" aria-labelledby="app-info-title">
+          <div className="section-heading">
+            <Info aria-hidden="true" />
+            <div>
+              <h2 id="app-info-title">アプリ情報</h2>
+              <p>公開中の修正版か確認できます。</p>
+            </div>
+          </div>
+          <dl className="app-info-list">
+            <div>
+              <dt>バージョン</dt>
+              <dd>v{APP_VERSION}</dd>
+            </div>
+            <div>
+              <dt>ビルド日時</dt>
+              <dd>{APP_BUILD_TIME_LABEL}</dd>
+            </div>
+            <div>
+              <dt>更新内容</dt>
+              <dd>{APP_RELEASE_NOTE}</dd>
+            </div>
+          </dl>
         </section>
       </div>
     </main>

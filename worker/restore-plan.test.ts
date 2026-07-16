@@ -53,7 +53,7 @@ function backupWithMemos(memoCount: number): BackupEnvelope {
 
 describe("restore query planning", () => {
   it("keeps every multi-row insert within the 100-parameter limit", () => {
-    expect(maxRowsPerInsert(RESTORE_COLUMNS_PER_ROW.parkingLots)).toBe(7);
+    expect(maxRowsPerInsert(RESTORE_COLUMNS_PER_ROW.parkingLots)).toBe(6);
     expect(maxRowsPerInsert(RESTORE_COLUMNS_PER_ROW.pricingVersions)).toBe(7);
     expect(maxRowsPerInsert(RESTORE_COLUMNS_PER_ROW.availabilityLogs)).toBe(12);
     expect(maxRowsPerInsert(RESTORE_COLUMNS_PER_ROW.memos)).toBe(20);

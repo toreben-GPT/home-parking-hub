@@ -1,10 +1,17 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+} from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { LoadingView } from "../components/Feedback";
 import {
   ParkingEditor,
   type ParkingEditorMode,
 } from "../features/parking/ParkingEditor";
+import { addMemoFromEditScreen } from "../features/parking/edit-memo";
 import { api } from "../services/api";
 import { EMPTY_PATTERN_PRICES } from "../shared/constants";
 import type { ParkingLot, ParkingLotInput } from "../shared/types";
@@ -17,7 +24,7 @@ function createInitialValue(): ParkingLotInput {
     walkMinutes: null,
     walkDistanceMeters: null,
     status: "active",
-    parkingEase: "normal",
+    parkingEase: "unrated",
     easeNote: "",
     paymentMethods: ["unknown"],
     recommendationComment: "",
@@ -71,6 +78,10 @@ export function EditPage({ mode }: { mode: ParkingEditorMode }) {
   const [lot, setLot] = useState<ParkingLot | null>(null);
   const [loading, setLoading] = useState(mode === "edit");
   const [error, setError] = useState("");
+  const [memoBody, setMemoBody] = useState("");
+  const [memoBusy, setMemoBusy] = useState(false);
+  const [memoError, setMemoError] = useState("");
+  const [memoSuccess, setMemoSuccess] = useState("");
 
   useEffect(() => {
     if (mode !== "edit" || !parkingId) return;
@@ -114,6 +125,27 @@ export function EditPage({ mode }: { mode: ParkingEditorMode }) {
     [lot, mode, parkingId],
   );
 
+  const handleMemoSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!parkingId || memoBusy) return;
+
+    setMemoBusy(true);
+    setMemoError("");
+    setMemoSuccess("");
+    try {
+      const saved = await addMemoFromEditScreen(parkingId, memoBody, api.addMemo);
+      setLot(saved);
+      setMemoBody("");
+      setMemoSuccess("メモを追加しました。");
+    } catch (caught) {
+      setMemoError(
+        caught instanceof Error ? caught.message : "メモを追加できませんでした。",
+      );
+    } finally {
+      setMemoBusy(false);
+    }
+  };
+
   if (loading) {
     return (
       <main className="screen screen--centered">
@@ -151,6 +183,79 @@ export function EditPage({ mode }: { mode: ParkingEditorMode }) {
         }}
         error={error}
       />
+      {mode === "edit" && parkingId && lot ? (
+        <form
+          className="edit-memo-form"
+          aria-busy={memoBusy}
+          onSubmit={(event) => void handleMemoSubmit(event)}
+        >
+          <section
+            className="parking-editor__section"
+            aria-labelledby="edit-memo-heading"
+          >
+            <div className="parking-editor__section-heading">
+              <h2 className="parking-editor__section-title" id="edit-memo-heading">
+                メモを追加
+              </h2>
+              <p className="parking-editor__section-description">
+                駐車場情報の変更とは別に、現地で確認したことを追記できます。
+              </p>
+            </div>
+            <div className="parking-editor__field parking-editor__field--wide">
+              <label className="parking-editor__label" htmlFor="edit-memo-body">
+                管理メモ
+              </label>
+              <textarea
+                className="parking-editor__textarea"
+                id="edit-memo-body"
+                name="memoBody"
+                rows={4}
+                maxLength={10_000}
+                placeholder="例：収容台数5台。夕方は満車になることがある。"
+                value={memoBody}
+                disabled={memoBusy}
+                aria-invalid={Boolean(memoError)}
+                aria-describedby={
+                  memoError
+                    ? "edit-memo-help edit-memo-error"
+                    : "edit-memo-help"
+                }
+                onChange={(event) => {
+                  setMemoBody(event.currentTarget.value);
+                  setMemoError("");
+                  setMemoSuccess("");
+                }}
+              />
+              <p className="parking-editor__section-description" id="edit-memo-help">
+                追加済みのメモの編集・削除は、保存後の詳細画面から行えます。
+              </p>
+              {memoError ? (
+                <p
+                  className="parking-editor__field-error"
+                  id="edit-memo-error"
+                  role="alert"
+                >
+                  {memoError}
+                </p>
+              ) : null}
+              {memoSuccess ? (
+                <p className="edit-memo-form__success" role="status">
+                  {memoSuccess}
+                </p>
+              ) : null}
+            </div>
+            <div className="edit-memo-form__actions">
+              <button
+                className="parking-editor__button parking-editor__button--primary"
+                type="submit"
+                disabled={memoBusy}
+              >
+                {memoBusy ? "追加中…" : "メモを追加"}
+              </button>
+            </div>
+          </section>
+        </form>
+      ) : null}
     </main>
   );
 }

@@ -29,6 +29,7 @@ import {
   formatParkingEase,
   formatParkingStatus,
   formatPaymentMethods,
+  formatPhotoNote,
   formatYen,
   getAvailabilitySummary,
   getAvailabilitySummaryForSegment,
@@ -377,7 +378,7 @@ export function DetailPage() {
                   <a href={photo.url} target="_blank" rel="noreferrer">
                     <img src={photo.url} alt={`${lot.name}の${PHOTO_KIND_LABELS[photo.kind]}`} loading="lazy" />
                     <span>{PHOTO_KIND_LABELS[photo.kind]}</span>
-                    {photo.note ? <small>{photo.note}</small> : null}
+                    {formatPhotoNote(photo.note) ? <small>{formatPhotoNote(photo.note)}</small> : null}
                   </a>
                   <button
                     className="photo-delete"
@@ -570,6 +571,7 @@ export function DetailPage() {
               <textarea
                 value={memoBody}
                 disabled={busy === "memo"}
+                maxLength={10_000}
                 onChange={(event) => setMemoBody(event.target.value)}
                 rows={3}
               />
@@ -589,6 +591,7 @@ export function DetailPage() {
                         aria-label="メモを編集"
                         value={editingMemoBody}
                         disabled={busy === "memo-edit"}
+                        maxLength={10_000}
                         onChange={(event) => setEditingMemoBody(event.target.value)}
                         rows={3}
                       />
