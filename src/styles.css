@@ -1626,6 +1626,10 @@ textarea:focus-visible {
   font-size: 17px;
 }
 
+.photo-upload-form .feedback {
+  margin-bottom: 0;
+}
+
 .inline-form > label,
 .two-field-row > label {
   display: grid;

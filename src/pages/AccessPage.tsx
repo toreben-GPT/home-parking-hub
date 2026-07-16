@@ -11,14 +11,15 @@ export function AccessPage() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!code.trim()) {
+    const normalizedCode = code.trim();
+    if (!normalizedCode) {
       setError("共有アクセスコードを入力してください。");
       return;
     }
     setBusy(true);
     setError("");
     try {
-      await login(code);
+      await login(normalizedCode);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "アクセスコードを確認できませんでした。");
     } finally {
@@ -45,6 +46,9 @@ export function AccessPage() {
               name="access-code"
               type="password"
               autoComplete="current-password"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
               value={code}
               onChange={(event) => setCode(event.target.value)}
               disabled={busy}

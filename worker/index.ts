@@ -27,6 +27,7 @@ import {
   hashLoginClient,
   recordFailedLogin,
 } from "./login-rate-limit";
+import { readMultipartFormData } from "./multipart";
 import {
   addAvailability,
   addMemo,
@@ -46,6 +47,7 @@ import {
 } from "./repository";
 import {
   isAllowedPhotoContentType,
+  normalizePhotoContentType,
   photoSignatureMatches,
   validateAvailabilityInput,
   validateBackupEnvelope,
@@ -59,6 +61,7 @@ import {
 
 const MUTATION_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 const BACKUP_BODY_LIMIT_BYTES = 25 * 1024 * 1024;
+const PHOTO_FORM_OVERHEAD_LIMIT_BYTES = 1024 * 1024;
 
 function isApiPath(pathname: string): boolean {
   return pathname === "/api" || pathname.startsWith("/api/");
@@ -143,29 +146,21 @@ async function handleAuth(request: Request, env: Env, segments: string[]): Promi
   return null;
 }
 
-async function handlePhotoUpload(request: Request, env: Env, parkingLotId: string): Promise<Response> {
+export async function handlePhotoUpload(request: Request, env: Env, parkingLotId: string): Promise<Response> {
   await requireParkingLot(env.DB, parkingLotId);
-  const contentType = request.headers.get("Content-Type")?.toLowerCase() ?? "";
-  if (!contentType.startsWith("multipart/form-data")) {
-    throw new HttpError(415, "写真はフォーム形式で送信してください。");
-  }
-  const contentLength = Number(request.headers.get("Content-Length"));
-  if (Number.isFinite(contentLength) && contentLength > PHOTO_UPLOAD_LIMIT_BYTES + 1024 * 1024) {
-    throw new HttpError(413, "写真は10MB以下にしてください。");
-  }
-
-  let formData: FormData;
-  try {
-    formData = await request.formData();
-  } catch {
-    throw new HttpError(400, "写真フォームを読み取れませんでした。");
+  const { formData } = await readMultipartFormData(
+    request,
+    PHOTO_UPLOAD_LIMIT_BYTES + PHOTO_FORM_OVERHEAD_LIMIT_BYTES,
+  );
+  if (formData.getAll("file").length !== 1 || formData.getAll("kind").length !== 1 || formData.getAll("note").length > 1) {
+    throw new HttpError(400, "写真フォームの項目が不足しているか重複しています。");
   }
   const fileValue = formData.get("file");
   if (!(fileValue instanceof File)) throw new HttpError(400, "アップロードする写真を選んでください。");
   if (fileValue.size === 0) throw new HttpError(400, "空の写真ファイルは登録できません。");
   if (fileValue.size > PHOTO_UPLOAD_LIMIT_BYTES) throw new HttpError(413, "写真は10MB以下にしてください。");
 
-  const normalizedContentType = fileValue.type.toLowerCase().split(";", 1)[0].trim();
+  const normalizedContentType = normalizePhotoContentType(fileValue.type, fileValue.name);
   if (!isAllowedPhotoContentType(normalizedContentType)) {
     throw new HttpError(415, "JPEG、PNG、WebP、HEIC、HEIF形式の写真だけ登録できます。");
   }
@@ -208,7 +203,7 @@ async function handlePhotoUpload(request: Request, env: Env, parkingLotId: strin
   }
 }
 
-async function handlePhotoRead(env: Env, photoId: string): Promise<Response> {
+export async function handlePhotoRead(env: Env, photoId: string): Promise<Response> {
   const photo = await getPhotoRow(env.DB, photoId);
   if (!photo) throw new HttpError(404, "指定した写真が見つかりません。");
   const object = await env.PHOTOS.get(photo.object_key);
@@ -222,6 +217,19 @@ async function handlePhotoRead(env: Env, photoId: string): Promise<Response> {
   headers.set("Cache-Control", "private, no-store");
   headers.set("X-Content-Type-Options", "nosniff");
   return new Response(object.body, { headers });
+}
+
+export async function handlePhotoDelete(env: Env, parkingLotId: string, photoId: string): Promise<Response> {
+  const photo = await deletePhotoMetadata(env.DB, parkingLotId, photoId);
+  try {
+    await env.PHOTOS.delete(photo.object_key);
+  } catch (error) {
+    console.error("Failed to delete orphaned R2 photo object", {
+      objectKey: photo.object_key,
+      error,
+    });
+  }
+  return jsonResponse({ parkingLot: await requireParkingLot(env.DB, parkingLotId) });
 }
 
 async function handleBackup(request: Request, env: Env, segments: string[]): Promise<Response | null> {
@@ -329,16 +337,7 @@ async function handleParking(request: Request, env: Env, segments: string[], url
     }
     if (segments.length === 5) {
       if (request.method !== "DELETE") return methodNotAllowed(["DELETE"]);
-      const photo = await deletePhotoMetadata(env.DB, parkingLotId, segments[4]);
-      try {
-        await env.PHOTOS.delete(photo.object_key);
-      } catch (error) {
-        console.error("Failed to delete orphaned R2 photo object", {
-          objectKey: photo.object_key,
-          error,
-        });
-      }
-      return jsonResponse({ parkingLot: await requireParkingLot(env.DB, parkingLotId) });
+      return handlePhotoDelete(env, parkingLotId, segments[4]);
     }
   }
 

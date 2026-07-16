@@ -242,6 +242,23 @@ export function isAllowedPhotoContentType(value: string): boolean {
   return ALLOWED_PHOTO_CONTENT_TYPES.has(value.toLowerCase().split(";", 1)[0].trim());
 }
 
+export function normalizePhotoContentType(value: string, fileName: string): string {
+  const normalized = value.toLowerCase().split(";", 1)[0].trim();
+  if (isAllowedPhotoContentType(normalized)) return normalized;
+  if (normalized && normalized !== "application/octet-stream") return normalized;
+
+  const extension = fileName.toLowerCase().match(/\.([a-z0-9]+)$/u)?.[1] ?? "";
+  const byExtension: Record<string, string> = {
+    jpeg: "image/jpeg",
+    jpg: "image/jpeg",
+    png: "image/png",
+    webp: "image/webp",
+    heic: "image/heic",
+    heif: "image/heif",
+  };
+  return byExtension[extension] ?? normalized;
+}
+
 export function validatePhotoKind(value: unknown): PhotoKind {
   return enumValue(value, PHOTO_KINDS, "kind") as PhotoKind;
 }
@@ -252,7 +269,7 @@ export function validatePhotoNote(value: unknown): string {
 }
 
 export async function photoSignatureMatches(file: File, normalizedContentType: string): Promise<boolean> {
-  const bytes = new Uint8Array(await file.slice(0, 16).arrayBuffer());
+  const bytes = new Uint8Array(await file.slice(0, 64).arrayBuffer());
   if (normalizedContentType === "image/jpeg") {
     return bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
   }
@@ -267,7 +284,13 @@ export async function photoSignatureMatches(file: File, normalizedContentType: s
       decoderText(bytes.slice(8, 12)) === "WEBP"
     );
   }
-  return bytes.length >= 12 && decoderText(bytes.slice(4, 8)) === "ftyp";
+  if (bytes.length < 12 || decoderText(bytes.slice(4, 8)) !== "ftyp") return false;
+  const allowedBrands = new Set(["heic", "heix", "hevc", "hevx", "mif1", "msf1"]);
+  const brands = [decoderText(bytes.slice(8, 12))];
+  for (let offset = 16; offset + 4 <= bytes.length; offset += 4) {
+    brands.push(decoderText(bytes.slice(offset, offset + 4)));
+  }
+  return brands.some((brand) => allowedBrands.has(brand));
 }
 
 function decoderText(bytes: Uint8Array): string {

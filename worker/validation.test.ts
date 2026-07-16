@@ -4,6 +4,8 @@ import type { BackupEnvelope, ParkingLot, ParkingLotInput, PatternPrices } from 
 import { requireCsrfHeader } from "./http";
 import {
   isAllowedPhotoContentType,
+  normalizePhotoContentType,
+  photoSignatureMatches,
   validateBackupEnvelope,
   validateParkingLotInput,
   validateParkingLotUpdate,
@@ -90,6 +92,44 @@ describe("request validation", () => {
     expect(isAllowedPhotoContentType("image/heif-sequence; charset=binary")).toBe(true);
     expect(isAllowedPhotoContentType("image/svg+xml")).toBe(false);
     expect(isAllowedPhotoContentType("application/octet-stream")).toBe(false);
+  });
+
+  it("recovers image MIME types from extensions when Safari omits the type", () => {
+    expect(normalizePhotoContentType("", "IMG_1234.HEIC")).toBe("image/heic");
+    expect(normalizePhotoContentType("application/octet-stream", "photo.webp")).toBe("image/webp");
+    expect(normalizePhotoContentType("image/png", "renamed.jpg")).toBe("image/png");
+    expect(normalizePhotoContentType("text/plain", "photo.png")).toBe("text/plain");
+  });
+
+  it("checks PNG, JPEG, WebP, and HEIC signatures and rejects a video ftyp box", async () => {
+    const file = (bytes: number[], type: string) => new File([new Uint8Array(bytes)], "photo", { type });
+    const ascii = (value: string) => [...new TextEncoder().encode(value)];
+
+    await expect(photoSignatureMatches(file([0xff, 0xd8, 0xff], "image/jpeg"), "image/jpeg")).resolves.toBe(true);
+    await expect(
+      photoSignatureMatches(
+        file([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], "image/png"),
+        "image/png",
+      ),
+    ).resolves.toBe(true);
+    await expect(
+      photoSignatureMatches(
+        file([...ascii("RIFF"), 0, 0, 0, 0, ...ascii("WEBP")], "image/webp"),
+        "image/webp",
+      ),
+    ).resolves.toBe(true);
+    await expect(
+      photoSignatureMatches(
+        file([0, 0, 0, 24, ...ascii("ftyp"), ...ascii("mif1"), 0, 0, 0, 0, ...ascii("heic")], "image/heic"),
+        "image/heic",
+      ),
+    ).resolves.toBe(true);
+    await expect(
+      photoSignatureMatches(
+        file([0, 0, 0, 20, ...ascii("ftyp"), ...ascii("isom"), 0, 0, 0, 0], "image/heic"),
+        "image/heic",
+      ),
+    ).resolves.toBe(false);
   });
 
   it("validates a full backup before restore", () => {

@@ -15,7 +15,8 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "home-parking-hub-db"
+      "database_name": "home-parking-hub-db",
+      "database_id": "85fdc896-445a-48cc-885c-02a382ca3c7d"
     }
   ],
   "r2_buckets": [
