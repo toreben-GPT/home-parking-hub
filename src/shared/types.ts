@@ -2,7 +2,7 @@ export const PATTERN_IDS = ["WN-19", "WN-20", "HN-19", "HN-20", "W-24", "H-24"] 
 export type PatternId = (typeof PATTERN_IDS)[number];
 
 export type ParkingStatus = "active" | "excluded" | "closed";
-export type ParkingEase = "easy" | "normal" | "difficult";
+export type ParkingEase = "easy" | "normal" | "difficult" | "unrated";
 export type PaymentMethod = "cash" | "cashless" | "unknown";
 export type PhotoKind = "price_sign" | "entrance" | "overview" | "other";
 export type AvailabilityStatus = "available" | "limited" | "full";
@@ -105,7 +105,7 @@ export interface AvailabilitySummary {
 export type RecommendationLabel = "最安" | "最安・距離長め" | "近さとのバランス良好" | "停めやすさ良好";
 
 export interface BackupEnvelope {
-  schemaVersion: 1;
+  schemaVersion: 1 | 2;
   exportedAt: string;
   parkingLots: ParkingLot[];
   photoBackup: {

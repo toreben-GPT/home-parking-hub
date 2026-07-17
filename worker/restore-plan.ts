@@ -6,7 +6,7 @@ export const RESTORE_DELETE_QUERY_COUNT = 5;
 export const RESTORE_RESULT_READ_QUERY_COUNT = 5;
 
 export const RESTORE_COLUMNS_PER_ROW = {
-  parkingLots: 14,
+  parkingLots: 15,
   pricingVersions: 14,
   availabilityLogs: 8,
   memos: 5,

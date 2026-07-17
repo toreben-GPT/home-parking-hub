@@ -3,6 +3,7 @@ import { HttpError } from "./http";
 const CRLF = new Uint8Array([13, 10]);
 const HEADER_SEPARATOR = new Uint8Array([13, 10, 13, 10]);
 const MAX_BOUNDARY_LENGTH = 70;
+const MAX_PREAMBLE_BYTES = 8 * 1024;
 const MAX_PART_COUNT = 16;
 const MAX_PART_HEADER_BYTES = 16 * 1024;
 
@@ -107,17 +108,33 @@ function findNextBoundary(value: Uint8Array, marker: Uint8Array, start: number):
   return -1;
 }
 
+function findOpeningBoundary(value: Uint8Array, marker: Uint8Array): number {
+  const latestStart = Math.min(MAX_PREAMBLE_BYTES, value.length - marker.length);
+  let candidate = findBytes(value, marker, 0);
+  while (candidate >= 0 && candidate <= latestStart) {
+    const hasValidPrefix = candidate === 0 || startsWithBytes(value, CRLF, candidate - CRLF.length);
+    const suffix = candidate + marker.length;
+    const hasValidSuffix =
+      startsWithBytes(value, CRLF, suffix) ||
+      startsWithBytes(value, new Uint8Array([45, 45]), suffix);
+    if (hasValidPrefix && hasValidSuffix) return candidate;
+    candidate = findBytes(value, marker, candidate + marker.length);
+  }
+  return -1;
+}
+
 export function parseMultipartFormDataBytes(bytes: Uint8Array, contentType: string): FormData {
   const boundary = extractBoundary(contentType);
   const encoder = new TextEncoder();
   const openingBoundary = encoder.encode(`--${boundary}`);
   const partBoundary = encoder.encode(`\r\n--${boundary}`);
-  if (!startsWithBytes(bytes, openingBoundary)) {
+  const openingBoundaryOffset = findOpeningBoundary(bytes, openingBoundary);
+  if (openingBoundaryOffset < 0) {
     throw new HttpError(400, "写真フォームの先頭が正しくありません。");
   }
 
   const formData = new FormData();
-  let position = openingBoundary.length;
+  let position = openingBoundaryOffset + openingBoundary.length;
   let partCount = 0;
   let closed = false;
 
@@ -221,6 +238,8 @@ export async function readMultipartFormData(
   }
 
   const bytes = await readBodyWithLimit(request, maximumBytes);
+  const openingBoundary = new TextEncoder().encode(`--${boundary}`);
+  const openingBoundaryOffset = findOpeningBoundary(bytes, openingBoundary);
   try {
     const formData = await nativeParser(bytes, contentType);
     if (formData.get("file") instanceof File) {
@@ -232,6 +251,7 @@ export async function readMultipartFormData(
       const formData = parseMultipartFormDataBytes(bytes, contentType);
       console.warn("Native multipart parser failed; bounded fallback succeeded", {
         boundaryLength: boundary.length,
+        openingBoundaryOffset,
         contentLength,
         bodyBytes: bytes.byteLength,
         nativeError: errorSummary(error),
@@ -240,6 +260,7 @@ export async function readMultipartFormData(
     } catch (fallbackError) {
       console.warn("Multipart parsing failed", {
         boundaryLength: boundary.length,
+        openingBoundaryOffset,
         contentLength,
         bodyBytes: bytes.byteLength,
         nativeError: errorSummary(error),

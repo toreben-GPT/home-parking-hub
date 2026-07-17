@@ -33,7 +33,11 @@ describe("photo R2 and D1 flow", () => {
     storedContentType = "";
     photoRow = null;
 
-    r2Put = vi.fn(async (_key: string, value: ReadableStream<Uint8Array>, options: R2PutOptions) => {
+    r2Put = vi.fn(async (
+      _key: string,
+      value: ArrayBuffer | ReadableStream<Uint8Array>,
+      options: R2PutOptions,
+    ) => {
       storedBody = new Uint8Array(await new Response(value).arrayBuffer());
       storedContentType = options.httpMetadata && "contentType" in options.httpMetadata
         ? options.httpMetadata.contentType ?? ""
@@ -99,6 +103,7 @@ describe("photo R2 and D1 flow", () => {
     expect(uploadPayload.photo.fileName).toBe("料金看板.png");
     expect(uploadPayload.photo.url).toBe(`/api/photos/${encodeURIComponent(uploadPayload.photo.id)}`);
     expect(storedBody).toEqual(pngBytes);
+    expect(r2Put.mock.calls[0]?.[1]).toBeInstanceOf(ArrayBuffer);
     expect(photoRow?.content_type).toBe("image/png");
     expect(r2Put.mock.invocationCallOrder[0]).toBeLessThan(
       vi.mocked(repository.insertPhoto).mock.invocationCallOrder[0],

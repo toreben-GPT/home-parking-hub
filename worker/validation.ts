@@ -1,6 +1,6 @@
 import {
-  BACKUP_SCHEMA_VERSION,
   PHOTO_UPLOAD_LIMIT_BYTES,
+  SUPPORTED_BACKUP_SCHEMA_VERSIONS,
 } from "../src/shared/constants";
 import type {
   AvailabilityLog,
@@ -25,7 +25,7 @@ import { HttpError } from "./http";
 import { calculateRestoreQueryPlan, RESTORE_SAFE_QUERY_LIMIT } from "./restore-plan";
 
 const PARKING_STATUSES = ["active", "excluded", "closed"] as const;
-const PARKING_EASES = ["easy", "normal", "difficult"] as const;
+const PARKING_EASES = ["easy", "normal", "difficult", "unrated"] as const;
 const PAYMENT_METHODS = ["cash", "cashless", "unknown"] as const;
 const AVAILABILITY_STATUSES = ["available", "limited", "full"] as const;
 const DAY_TYPES = ["weekday", "holiday"] as const;
@@ -441,9 +441,12 @@ function validateBackupParkingLot(value: unknown, path: string): ParkingLot {
 
 export function validateBackupEnvelope(value: unknown): BackupEnvelope {
   const input = record(value, "バックアップ");
-  if (input.schemaVersion !== BACKUP_SCHEMA_VERSION) {
+  if (
+    typeof input.schemaVersion !== "number" ||
+    !SUPPORTED_BACKUP_SCHEMA_VERSIONS.includes(input.schemaVersion as 1 | 2)
+  ) {
     throw new ValidationError(
-      `schemaVersion は ${BACKUP_SCHEMA_VERSION} のバックアップだけ復元できます。`,
+      `schemaVersion は ${SUPPORTED_BACKUP_SCHEMA_VERSIONS.join(" または ")} のバックアップだけ復元できます。`,
       "このバックアップ形式には対応していません。",
     );
   }
@@ -465,7 +468,7 @@ export function validateBackupEnvelope(value: unknown): BackupEnvelope {
   }
 
   const backup: BackupEnvelope = {
-    schemaVersion: BACKUP_SCHEMA_VERSION,
+    schemaVersion: input.schemaVersion as BackupEnvelope["schemaVersion"],
     exportedAt: dateTime(input.exportedAt, "exportedAt"),
     parkingLots,
     photoBackup: {

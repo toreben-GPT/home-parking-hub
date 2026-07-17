@@ -38,12 +38,14 @@ const EASE_RANK: Readonly<Record<ParkingEase, number>> = {
   easy: 0,
   normal: 1,
   difficult: 2,
+  unrated: 3,
 };
 
 const EASE_LABELS: Readonly<Record<ParkingEase, string>> = {
   easy: "停めやすい",
   normal: "普通",
   difficult: "停めにくい",
+  unrated: "未評価",
 };
 
 const PAYMENT_LABELS: Readonly<Record<PaymentMethod, string>> = {
@@ -184,12 +186,6 @@ export function sortParkingLots(lots: readonly ParkingLot[], patternId: PatternI
       const walkComparison = compareOptionalNumberAscending(left.lot.walkMinutes, right.lot.walkMinutes);
       if (walkComparison !== 0) return walkComparison;
 
-      const distanceComparison = compareOptionalNumberAscending(
-        left.lot.walkDistanceMeters,
-        right.lot.walkDistanceMeters,
-      );
-      if (distanceComparison !== 0) return distanceComparison;
-
       const easeComparison = EASE_RANK[left.lot.parkingEase] - EASE_RANK[right.lot.parkingEase];
       if (easeComparison !== 0) return easeComparison;
 
@@ -311,8 +307,12 @@ export function formatPatternLabel(patternId: PatternId): string {
   return PATTERN_LABELS[patternId];
 }
 
+/** Keeps importer integrity metadata in backups without exposing it in the normal UI. */
+export function formatPhotoNote(note: string): string {
+  return note.replace(/\s*\|\s*sha256=[a-f0-9]{64}$/iu, "").trim();
+}
+
 function formatAvailabilityCount(summary: AvailabilitySummary): string {
-  if (summary.total === 0) return "記録なし";
   return `${summary.parkable}/${summary.total}回（残りわずか${summary.limited}回）`;
 }
 

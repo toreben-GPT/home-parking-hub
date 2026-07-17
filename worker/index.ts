@@ -175,7 +175,10 @@ export async function handlePhotoUpload(request: Request, env: Env, parkingLotId
   const createdAt = new Date().toISOString();
   const fileName = sanitizeFileName(fileValue.name);
 
-  await env.PHOTOS.put(objectKey, fileValue.stream(), {
+  // Streaming R2 uploads need a known length. A File-derived stream is not
+  // guaranteed to retain that length in the Workers runtime, so store the
+  // already size-bounded body as an ArrayBuffer.
+  await env.PHOTOS.put(objectKey, await fileValue.arrayBuffer(), {
     httpMetadata: { contentType: normalizedContentType },
     customMetadata: {
       parkingLotId,

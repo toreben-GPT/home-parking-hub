@@ -26,13 +26,23 @@ interface ParkingRow {
   walk_minutes: number | null;
   walk_distance_meters: number | null;
   status: ParkingLot["status"];
-  parking_ease: ParkingLot["parkingEase"];
+  parking_ease: Exclude<ParkingLot["parkingEase"], "unrated">;
+  parking_ease_evaluated: number;
   ease_note: string;
   payment_methods: string;
   recommendation_comment: string;
   ai_summary: string;
   created_at: string;
   updated_at: string;
+}
+
+function parkingEaseForStorage(ease: ParkingLot["parkingEase"]): {
+  value: Exclude<ParkingLot["parkingEase"], "unrated">;
+  evaluated: 0 | 1;
+} {
+  return ease === "unrated"
+    ? { value: "normal", evaluated: 0 }
+    : { value: ease, evaluated: 1 };
 }
 
 interface PricingRow {
@@ -152,13 +162,14 @@ function parkingInsertStatement(
   createdAt: string,
   updatedAt: string,
 ): D1PreparedStatement {
+  const storedEase = parkingEaseForStorage(input.parkingEase);
   return db
     .prepare(
       `INSERT INTO parking_lots (
         id, name, address, maps_url, walk_minutes, walk_distance_meters,
-        status, parking_ease, ease_note, payment_methods, recommendation_comment,
-        ai_summary, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        status, parking_ease, parking_ease_evaluated, ease_note, payment_methods,
+        recommendation_comment, ai_summary, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       id,
@@ -168,7 +179,8 @@ function parkingInsertStatement(
       input.walkMinutes,
       input.walkDistanceMeters,
       input.status,
-      input.parkingEase,
+      storedEase.value,
+      storedEase.evaluated,
       input.easeNote,
       JSON.stringify(input.paymentMethods),
       input.recommendationComment,
@@ -283,7 +295,7 @@ async function hydrateParkingRows(db: D1Database, parkingRows: ParkingRow[]): Pr
       walkMinutes: row.walk_minutes,
       walkDistanceMeters: row.walk_distance_meters,
       status: row.status,
-      parkingEase: row.parking_ease,
+      parkingEase: row.parking_ease_evaluated === 0 ? "unrated" : row.parking_ease,
       easeNote: row.ease_note,
       paymentMethods: JSON.parse(row.payment_methods) as PaymentMethod[],
       recommendationComment: row.recommendation_comment,
@@ -361,6 +373,7 @@ export async function updateParkingLot(
   const now = new Date(
     Math.max(Date.now(), Date.parse(expectedUpdatedAt) + 1),
   ).toISOString();
+  const storedEase = parkingEaseForStorage(input.parkingEase);
   const statements: D1PreparedStatement[] = [];
 
   if (pricingContentChanged(pricingRowToInput(current), input.pricing)) {
@@ -393,7 +406,7 @@ export async function updateParkingLot(
       .prepare(
         `UPDATE parking_lots SET
           name = ?, address = ?, maps_url = ?, walk_minutes = ?, walk_distance_meters = ?,
-          status = ?, parking_ease = ?, ease_note = ?, payment_methods = ?,
+          status = ?, parking_ease = ?, parking_ease_evaluated = ?, ease_note = ?, payment_methods = ?,
           recommendation_comment = ?, ai_summary = ?, updated_at = ?
         WHERE id = ? AND updated_at = ?`,
       )
@@ -404,7 +417,8 @@ export async function updateParkingLot(
         input.walkMinutes,
         input.walkDistanceMeters,
         input.status,
-        input.parkingEase,
+        storedEase.value,
+        storedEase.evaluated,
         input.easeNote,
         JSON.stringify(input.paymentMethods),
         input.recommendationComment,
@@ -601,6 +615,7 @@ export async function replaceFromBackup(db: D1Database, backup: BackupEnvelope):
 
   for (const lot of backup.parkingLots) {
     const { pricingHistory, availabilityLogs, memos, photos } = lot;
+    const storedEase = parkingEaseForStorage(lot.parkingEase);
     parkingRows.push([
       lot.id,
       lot.name,
@@ -609,7 +624,8 @@ export async function replaceFromBackup(db: D1Database, backup: BackupEnvelope):
       lot.walkMinutes,
       lot.walkDistanceMeters,
       lot.status,
-      lot.parkingEase,
+      storedEase.value,
+      storedEase.evaluated,
       lot.easeNote,
       JSON.stringify(lot.paymentMethods),
       lot.recommendationComment,
@@ -671,8 +687,8 @@ export async function replaceFromBackup(db: D1Database, backup: BackupEnvelope):
       "parking_lots",
       [
         "id", "name", "address", "maps_url", "walk_minutes", "walk_distance_meters",
-        "status", "parking_ease", "ease_note", "payment_methods", "recommendation_comment",
-        "ai_summary", "created_at", "updated_at",
+        "status", "parking_ease", "parking_ease_evaluated", "ease_note", "payment_methods",
+        "recommendation_comment", "ai_summary", "created_at", "updated_at",
       ],
       parkingRows,
     ),

@@ -22,4 +22,21 @@ export default tseslint.config(
       "@typescript-eslint/no-explicit-any": "off",
     },
   },
+  {
+    extends: [js.configs.recommended],
+    files: ["scripts/**/*.mjs"],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: "module",
+      globals: {
+        Blob: "readonly",
+        console: "readonly",
+        fetch: "readonly",
+        FormData: "readonly",
+        Headers: "readonly",
+        process: "readonly",
+        URL: "readonly",
+      },
+    },
+  },
 );
