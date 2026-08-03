@@ -26,7 +26,7 @@ describe("supplied parking lot local importer", () => {
     }
   });
 
-  it("keeps the six image mappings and image-authoritative Lucky prices", () => {
+  it("keeps the six image mappings and calculated minimum 24-hour prices", () => {
     expect(
       SUPPLIED_PARKING_LOTS.map(({ imageFile, input }) => [imageFile, input.name]),
     ).toEqual([
@@ -43,7 +43,7 @@ describe("supplied parking lot local importer", () => {
         patternIds.map((patternId) => input.pricing.patternPrices[patternId].amountYen),
       ),
     ).toEqual([
-      [400, 800, 400, 800, 2_100, 1_300],
+      [400, 800, 400, 800, 1_700, 900],
       [500, 500, 500, 500, 1_500, 800],
       [700, 500, 600, 500, 1_800, 1_300],
       [600, 400, 600, 400, 2_800, 2_200],
@@ -53,6 +53,11 @@ describe("supplied parking lot local importer", () => {
     expect(SUPPLIED_PARKING_LOTS.map(({ input }) => input.parkingEase)).toEqual(
       Array(6).fill("unrated"),
     );
+    for (const { input } of SUPPLIED_PARKING_LOTS) {
+      expect(input.pricing.patternPrices["W-24"].needsConfirmation).toBe(false);
+      expect(input.pricing.patternPrices["H-24"].needsConfirmation).toBe(false);
+      expect(input.pricing.exceptions).not.toMatch(/20:00入庫.+基準/u);
+    }
   });
 
   it("preserves user-entered fields when updating a same-name lot", () => {
