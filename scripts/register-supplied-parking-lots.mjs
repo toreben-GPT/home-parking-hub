@@ -5,6 +5,8 @@ import { readFile, stat } from "node:fs/promises";
 import { basename, extname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 
+import { applyCalculated24HourPrices } from "./parking-price-calculator.mjs";
+
 const MUTATION_HEADERS = { "X-Requested-With": "home-parking-hub" };
 const PHOTO_LIMIT_BYTES = 10 * 1024 * 1024;
 
@@ -12,10 +14,35 @@ function price(amountYen) {
   return { amountYen, needsConfirmation: false };
 }
 
+function pendingPrice() {
+  return { amountYen: null, needsConfirmation: true };
+}
+
+function band(startHour, endHour, unitMinutes, unitYen, maximumYen = null) {
+  return {
+    startMinute: startHour * 60,
+    endMinute: endHour * 60,
+    unitMinutes,
+    unitYen,
+    maximumYen,
+  };
+}
+
+const MINIMUM_24_HOUR_NOTE =
+  "24時間料金は、特定の入庫時刻に固定せず、24時間利用できる全入庫時刻のうち最安となる料金を算出。";
+
 export const SUPPLIED_PARKING_LOTS = [
   {
     imageFile: "IMG_5008.HEIC",
     imageSource: "料金看板写真",
+    pricingRules: {
+      weekday: {
+        timeBands: [band(7, 19, 40, 200, 1_300), band(19, 7, 40, 200, 400)],
+      },
+      holiday: {
+        timeBands: [band(7, 19, 40, 200, 500), band(19, 7, 40, 200, 400)],
+      },
+    },
     input: {
       name: "ラッキーパーキング東F",
       address: "",
@@ -42,31 +69,38 @@ export const SUPPLIED_PARKING_LOTS = [
         nightMaximum: "全日 19:00〜7:00 最大400円",
         nightHours: "19:00〜翌7:00",
         maximumRepeat: "繰り返し適用",
-        exceptions: [
-          "24時間料金は、既存仕様に基準時刻がない場合の指定どおり20:00入庫〜翌20:00を基準に算出。",
-          "翌19:00〜20:00は昼間最大の対象外のため、通常料金を40分単位で切り上げて400円加算。",
-        ].join("\n"),
+        exceptions: MINIMUM_24_HOUR_NOTE,
         patternPrices: {
           "WN-19": price(400),
           "WN-20": price(800),
           "HN-19": price(400),
           "HN-20": price(800),
-          "W-24": price(2100),
-          "H-24": price(1300),
+          "W-24": pendingPrice(),
+          "H-24": pendingPrice(),
         },
-        changeNote: "添付画像 IMG_5008.HEIC の料金看板を優先して登録。",
+        changeNote: "24時間料金を固定の20:00入庫基準から、24時間利用時の最安料金へ修正。",
       },
     },
     memo: [
       "夜間最大は翌7:00まで。",
       "20:00〜翌8:00では、翌7:00〜8:00の通常料金400円（40分200円を2単位へ切り上げ）が追加される。",
-      "24時間料金は20:00〜翌20:00基準。夜間最大400円＋昼間最大1,300円／500円＋19:00〜20:00通常料金400円として、平日2,100円、土日祝1,300円。",
+      "24時間料金は入庫時刻を固定せず算出。昼間最大1,300円／500円＋夜間最大400円として、平日1,700円、土日祝900円。",
       "普通車区画は看板上「No.11〜28」と読める。",
     ].join("\n"),
   },
   {
     imageFile: "IMG_5011.HEIC",
     imageSource: "料金看板写真",
+    pricingRules: {
+      weekday: {
+        rolling24HourMaximumYen: 1_500,
+        timeBands: [band(8, 18, 60, 200), band(18, 8, 60, 200, 500)],
+      },
+      holiday: {
+        rolling24HourMaximumYen: 800,
+        timeBands: [band(8, 18, 60, 200), band(18, 8, 60, 200, 500)],
+      },
+    },
     input: {
       name: "セイワパーク博多駅東2丁目2",
       address: "",
@@ -98,8 +132,8 @@ export const SUPPLIED_PARKING_LOTS = [
           "WN-20": price(500),
           "HN-19": price(500),
           "HN-20": price(500),
-          "W-24": price(1500),
-          "H-24": price(800),
+          "W-24": pendingPrice(),
+          "H-24": pendingPrice(),
         },
         changeNote: "添付画像 IMG_5011.HEIC の料金看板を優先して登録。",
       },
@@ -113,6 +147,14 @@ export const SUPPLIED_PARKING_LOTS = [
   {
     imageFile: "IMG_5012.HEIC",
     imageSource: "料金看板写真",
+    pricingRules: {
+      weekday: {
+        timeBands: [band(8, 20, 60, 200, 1_300), band(20, 8, 60, 100, 500)],
+      },
+      holiday: {
+        timeBands: [band(8, 20, 60, 100, 800), band(20, 8, 60, 100, 500)],
+      },
+    },
     input: {
       name: "セイワパーク博多駅東",
       address: "",
@@ -145,14 +187,14 @@ export const SUPPLIED_PARKING_LOTS = [
         nightMaximum: "全日 20:00〜8:00 最大500円",
         nightHours: "20:00〜翌8:00",
         maximumRepeat: "不明",
-        exceptions: "24時間料金は、既存仕様に基準時刻がない場合の指定どおり20:00入庫〜翌20:00を基準に算出。",
+        exceptions: MINIMUM_24_HOUR_NOTE,
         patternPrices: {
           "WN-19": price(700),
           "WN-20": price(500),
           "HN-19": price(600),
           "HN-20": price(500),
-          "W-24": price(1800),
-          "H-24": price(1300),
+          "W-24": pendingPrice(),
+          "H-24": pendingPrice(),
         },
         changeNote: "添付画像 IMG_5012.HEIC の料金看板を優先して登録。",
       },
@@ -166,6 +208,14 @@ export const SUPPLIED_PARKING_LOTS = [
   {
     imageFile: "IMG_5016.PNG",
     imageSource: "Googleマップのスクリーンショット（料金看板参考写真）",
+    pricingRules: {
+      weekday: {
+        timeBands: [band(8, 20, 30, 100), band(20, 8, 60, 100, 400)],
+      },
+      holiday: {
+        timeBands: [band(8, 20, 40, 100), band(20, 8, 60, 100, 400)],
+      },
+    },
     input: {
       name: "あるあるパーキング博多駅東2丁目",
       address: "",
@@ -195,14 +245,14 @@ export const SUPPLIED_PARKING_LOTS = [
         nightMaximum: "全日 20:00〜8:00 最大400円",
         nightHours: "20:00〜翌8:00",
         maximumRepeat: "不明",
-        exceptions: "24時間料金は、既存仕様に基準時刻がない場合の指定どおり20:00入庫〜翌20:00を基準に算出。",
+        exceptions: MINIMUM_24_HOUR_NOTE,
         patternPrices: {
           "WN-19": price(600),
           "WN-20": price(400),
           "HN-19": price(600),
           "HN-20": price(400),
-          "W-24": price(2800),
-          "H-24": price(2200),
+          "W-24": pendingPrice(),
+          "H-24": pendingPrice(),
         },
         changeNote: "添付画像 IMG_5016.PNG 内の料金看板を優先して登録。",
       },
@@ -217,6 +267,14 @@ export const SUPPLIED_PARKING_LOTS = [
   {
     imageFile: "IMG_5013.HEIC",
     imageSource: "料金看板写真",
+    pricingRules: {
+      weekday: {
+        timeBands: [band(8, 20, 30, 200, 1_500), band(20, 8, 30, 100, 500)],
+      },
+      holiday: {
+        timeBands: [band(8, 20, 30, 200, 900), band(20, 8, 30, 100, 500)],
+      },
+    },
     input: {
       name: "PARKS PARK 福岡博多駅東3丁目",
       address: "",
@@ -243,14 +301,14 @@ export const SUPPLIED_PARKING_LOTS = [
         nightMaximum: "全日 20:00〜8:00 夜間最大500円",
         nightHours: "20:00〜翌8:00",
         maximumRepeat: "不明",
-        exceptions: "24時間料金は、既存仕様に基準時刻がない場合の指定どおり20:00入庫〜翌20:00を基準に算出。",
+        exceptions: MINIMUM_24_HOUR_NOTE,
         patternPrices: {
           "WN-19": price(900),
           "WN-20": price(500),
           "HN-19": price(900),
           "HN-20": price(500),
-          "W-24": price(2000),
-          "H-24": price(1400),
+          "W-24": pendingPrice(),
+          "H-24": pendingPrice(),
         },
         changeNote: "添付画像 IMG_5013.HEIC の料金看板を優先して登録。",
       },
@@ -264,6 +322,14 @@ export const SUPPLIED_PARKING_LOTS = [
   {
     imageFile: "IMG_5017.PNG",
     imageSource: "Googleマップのスクリーンショット（料金看板参考写真）",
+    pricingRules: {
+      weekday: {
+        timeBands: [band(8, 20, 60, 200), band(20, 8, 30, 100, 500)],
+      },
+      holiday: {
+        timeBands: [band(8, 20, 60, 100), band(20, 8, 60, 100, 400)],
+      },
+    },
     input: {
       name: "IBパーク 駅東",
       address: "",
@@ -294,14 +360,14 @@ export const SUPPLIED_PARKING_LOTS = [
         nightMaximum: "平日 20:00〜8:00 最大500円／土日祝 20:00〜8:00 最大400円",
         nightHours: "20:00〜翌8:00",
         maximumRepeat: "不明",
-        exceptions: "24時間料金は、既存仕様に基準時刻がない場合の指定どおり20:00入庫〜翌20:00を基準に算出。",
+        exceptions: MINIMUM_24_HOUR_NOTE,
         patternPrices: {
           "WN-19": price(700),
           "WN-20": price(500),
           "HN-19": price(500),
           "HN-20": price(400),
-          "W-24": price(2900),
-          "H-24": price(1600),
+          "W-24": pendingPrice(),
+          "H-24": pendingPrice(),
         },
         changeNote: "添付画像 IMG_5017.PNG 内の料金看板を優先して登録。",
       },
@@ -312,7 +378,10 @@ export const SUPPLIED_PARKING_LOTS = [
       "最大料金の繰り返し適用は画像から確認できないため不明。",
     ].join("\n"),
   },
-];
+].map((definition) => ({
+  ...definition,
+  input: applyCalculated24HourPrices(definition.input, definition.pricingRules),
+}));
 
 function printUsage() {
   console.log(`Usage:

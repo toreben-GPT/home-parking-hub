@@ -794,7 +794,7 @@ function ParkingEditorForm({
             className="parking-editor__fieldset-description"
             id={`${idPrefix}-patterns-help`}
           >
-            金額がわからない場合は「要確認」を選んでください。
+            24時間は入庫時刻を固定せず、24時間利用できる全入庫時刻の最安料金です。看板だけで確定できない場合は「要確認」を選んでください。
           </p>
           <div className="parking-editor__pattern-list">
             {PATTERN_DEFINITIONS.map((pattern) => {
